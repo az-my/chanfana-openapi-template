@@ -14,15 +14,9 @@ import { HealthCheck } from "./endpoints/health-check";
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
 
-// Add CORS middleware for your frontend
+// Add CORS middleware for your frontend - Allow all origins for development
 app.use('*', cors({
-  origin: [
-    'http://localhost:3000', 
-    'http://localhost:5173', // Vite dev server
-    'http://localhost:5174', // Alternative Vite port
-    'https://yourdomain.com', // Replace with your production domain
-    // Add your Vercel/Netlify deployment URLs here
-  ],
+  origin: '*', // Allow all origins
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
