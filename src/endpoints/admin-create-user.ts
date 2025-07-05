@@ -103,7 +103,7 @@ export class AdminCreateUser extends OpenAPIRoute {
       }
 
       // Parse request body
-      const body = await request.json();
+      const body = await request.json() as { email?: string; password?: string; role?: string };
       const { email, password, role } = body;
 
       if (!email || !password || !role) {
@@ -154,7 +154,7 @@ export class AdminCreateUser extends OpenAPIRoute {
     } catch (error) {
       console.error('Error creating user:', error);
       return Response.json(
-        { success: false, error: error.message || 'Failed to create user' },
+        { success: false, error: (error as Error).message || 'Failed to create user' },
         { status: 500 }
       );
     }
