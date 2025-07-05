@@ -1,10 +1,13 @@
 {
   "compatibility_date": "2025-04-01",
   "main": "src/index.ts",
-  "name": "chanfana-openapi-template",
+  "name": "v3-sppd-lembur-admin-api",
   "upload_source_maps": true,
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "ENVIRONMENT": "development"
   },
   "d1_databases": [
     {
