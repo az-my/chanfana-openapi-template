@@ -19,6 +19,7 @@ app.use('*', cors({
   origin: [
     'http://localhost:3000', 
     'http://localhost:5173', // Vite dev server
+    'http://localhost:5174', // Alternative Vite port
     'https://yourdomain.com', // Replace with your production domain
     // Add your Vercel/Netlify deployment URLs here
   ],
