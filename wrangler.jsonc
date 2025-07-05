@@ -7,7 +7,9 @@
     "enabled": true
   },
   "vars": {
-    "ENVIRONMENT": "development"
+    "ENVIRONMENT": "development",
+    "SUPABASE_URL": "https://nwdqbfqfgndnusoqddrc.supabase.co",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZHFiZnFmZ25kbnVzb3FkZHJjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzc5MTQwOCwiZXhwIjoyMDUzMzY3NDA4fQ.BX6BG5KHBwr30ueADMdVwehXFDOmzLRbWOQxLlmc6iA"
   },
   "d1_databases": [
     {
