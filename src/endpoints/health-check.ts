@@ -1,4 +1,5 @@
 import { OpenAPIRoute } from 'chanfana';
+import { AppContext } from '../types';
 
 export class HealthCheck extends OpenAPIRoute {
   static schema = {
@@ -23,8 +24,8 @@ export class HealthCheck extends OpenAPIRoute {
     }
   };
 
-  async handle(request: Request, env: any, context: any) {
-    return Response.json({
+  async handle(c: AppContext) {
+    return c.json({
       status: 'ok',
       message: 'Admin API is running',
       timestamp: new Date().toISOString()

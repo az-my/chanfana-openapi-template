@@ -1,5 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { createClient } from '@supabase/supabase-js';
+import { AppContext } from '../types';
 
 export class AdminCreateUser extends OpenAPIRoute {
   static schema = {
@@ -91,32 +92,49 @@ export class AdminCreateUser extends OpenAPIRoute {
     }
   };
 
-  async handle(request: Request, env: any, context: any) {
+  async handle(c: AppContext) {
     try {
+      const env = c.env;
+      
+      // Debug: Log environment variables
+      console.log('Environment variables:', {
+        SUPABASE_URL: env.SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY ? 'PRESENT' : 'MISSING',
+        ENV_KEYS: Object.keys(env)
+      });
+
+      if (!env.SUPABASE_URL) {
+        throw new Error(`supabaseUrl is required. Available env keys: ${Object.keys(env).join(', ')}`);
+      }
+
+      if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error(`supabaseServiceRoleKey is required. Available env keys: ${Object.keys(env).join(', ')}`);
+      }
+
       // Initialize Supabase with service role
       const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
       // Verify admin authentication
-      const authResult = await this.verifyAdminAuth(request, supabase);
+      const authResult = await this.verifyAdminAuth(c.req.raw, supabase);
       if (!authResult.success) {
-        return Response.json(authResult, { status: authResult.status });
+        return c.json(authResult, authResult.status as any);
       }
 
       // Parse request body
-      const body = await request.json() as { email?: string; password?: string; role?: string };
+      const body = await c.req.json() as { email?: string; password?: string; role?: string };
       const { email, password, role } = body;
 
       if (!email || !password || !role) {
-        return Response.json(
+        return c.json(
           { success: false, error: 'Email, password, and role are required' },
-          { status: 400 }
+          400
         );
       }
 
       if (!['admin_serpo', 'teknisi_serpo'].includes(role)) {
-        return Response.json(
+        return c.json(
           { success: false, error: 'Invalid role' },
-          { status: 400 }
+          400
         );
       }
 
@@ -142,20 +160,20 @@ export class AdminCreateUser extends OpenAPIRoute {
 
       if (profileError) throw profileError;
 
-      return Response.json({ 
+      return c.json({ 
         success: true, 
         user: {
           id: authData.user.id,
           email: authData.user.email,
           role
         }
-      }, { status: 201 });
+      }, 201);
 
     } catch (error) {
       console.error('Error creating user:', error);
-      return Response.json(
+      return c.json(
         { success: false, error: (error as Error).message || 'Failed to create user' },
-        { status: 500 }
+        500
       );
     }
   }

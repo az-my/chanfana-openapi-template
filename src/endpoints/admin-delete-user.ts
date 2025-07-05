@@ -1,5 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { createClient } from '@supabase/supabase-js';
+import { AppContext } from '../types';
 
 export class AdminDeleteUser extends OpenAPIRoute {
   static schema = {
@@ -75,23 +76,25 @@ export class AdminDeleteUser extends OpenAPIRoute {
     }
   };
 
-  async handle(request: Request, env: any, context: any, data: any) {
+  async handle(c: AppContext) {
     try {
+      const env = c.env;
+      
       // Initialize Supabase with service role
       const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
       // Verify admin authentication
-      const authResult = await this.verifyAdminAuth(request, supabase);
+      const authResult = await this.verifyAdminAuth(c.req.raw, supabase);
       if (!authResult.success) {
-        return Response.json(authResult, { status: authResult.status });
+        return c.json(authResult, authResult.status as any);
       }
 
-      const { userId } = data.params;
+      const userId = c.req.param('userId');
 
       if (!userId) {
-        return Response.json(
+        return c.json(
           { success: false, error: 'User ID is required' },
-          { status: 400 }
+          400
         );
       }
 
@@ -99,24 +102,24 @@ export class AdminDeleteUser extends OpenAPIRoute {
       const { error } = await supabase.auth.admin.deleteUser(userId);
       if (error) {
         if (error.message.includes('not found')) {
-          return Response.json(
+          return c.json(
             { success: false, error: 'User not found' },
-            { status: 404 }
+            404
           );
         }
         throw error;
       }
 
-      return Response.json({ 
+      return c.json({ 
         success: true, 
         message: 'User deleted successfully' 
       });
 
     } catch (error) {
       console.error('Error deleting user:', error);
-      return Response.json(
+      return c.json(
         { success: false, error: 'Failed to delete user' },
-        { status: 500 }
+        500
       );
     }
   }

@@ -1,5 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { createClient } from '@supabase/supabase-js';
+import { AppContext } from '../types';
 
 export class AdminGetUsers extends OpenAPIRoute {
   static schema = {
@@ -66,15 +67,17 @@ export class AdminGetUsers extends OpenAPIRoute {
     }
   };
 
-  async handle(request: Request, env: any, context: any) {
+  async handle(c: AppContext) {
     try {
+      const env = c.env;
+      
       // Initialize Supabase with service role
       const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
       // Verify admin authentication
-      const authResult = await this.verifyAdminAuth(request, supabase);
+      const authResult = await this.verifyAdminAuth(c.req.raw, supabase);
       if (!authResult.success) {
-        return Response.json(authResult, { status: authResult.status });
+        return c.json(authResult, authResult.status as any);
       }
 
       // Get auth users
@@ -101,12 +104,12 @@ export class AdminGetUsers extends OpenAPIRoute {
         };
       });
 
-      return Response.json({ success: true, users });
+      return c.json({ success: true, users });
     } catch (error) {
       console.error('Error fetching users:', error);
-      return Response.json(
+      return c.json(
         { success: false, error: 'Failed to fetch users' },
-        { status: 500 }
+        500
       );
     }
   }
