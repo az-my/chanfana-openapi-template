@@ -15,12 +15,13 @@ export class AdminCreateUser extends OpenAPIRoute {
             properties: {
               email: { type: 'string', format: 'email' },
               password: { type: 'string', minLength: 6 },
+              full_name: { type: 'string', minLength: 1 },
               role: { 
                 type: 'string', 
                 enum: ['admin_serpo', 'teknisi_serpo'] 
               }
             },
-            required: ['email', 'password', 'role']
+            required: ['email', 'password', 'full_name', 'role']
           }
         }
       }
@@ -39,6 +40,7 @@ export class AdminCreateUser extends OpenAPIRoute {
                   properties: {
                     id: { type: 'string' },
                     email: { type: 'string' },
+                    full_name: { type: 'string' },
                     role: { type: 'string' }
                   }
                 }
@@ -121,12 +123,12 @@ export class AdminCreateUser extends OpenAPIRoute {
       }
 
       // Parse request body
-      const body = await c.req.json() as { email?: string; password?: string; role?: string };
-      const { email, password, role } = body;
+      const body = await c.req.json() as { email?: string; password?: string; full_name?: string; role?: string };
+      const { email, password, full_name, role } = body;
 
-      if (!email || !password || !role) {
+      if (!email || !password || !full_name || !role) {
         return c.json(
-          { success: false, error: 'Email, password, and role are required' },
+          { success: false, error: 'Email, password, full name, and role are required' },
           400
         );
       }
@@ -154,6 +156,8 @@ export class AdminCreateUser extends OpenAPIRoute {
         .insert({
           id: authData.user.id,
           role,
+          email,
+          full_name,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
@@ -165,6 +169,7 @@ export class AdminCreateUser extends OpenAPIRoute {
         user: {
           id: authData.user.id,
           email: authData.user.email,
+          full_name,
           role
         }
       }, 201);
