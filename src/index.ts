@@ -11,6 +11,11 @@ import { AdminCreateUser } from "./endpoints/admin-create-user";
 import { AdminDeleteUser } from "./endpoints/admin-delete-user";
 import { HealthCheck } from "./endpoints/health-check";
 
+// Import Google integration endpoints
+import { GoogleDriveUpload } from "./endpoints/google-drive-upload";
+import { GoogleSheetsSync } from "./endpoints/google-sheets-sync";
+import { GoogleIntegrationStatus } from "./endpoints/google-integration-status";
+
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
 
@@ -61,6 +66,11 @@ openapi.get("/api/health", HealthCheck);
 openapi.get("/api/admin/users", AdminGetUsers);
 openapi.post("/api/admin/users", AdminCreateUser);
 openapi.delete("/api/admin/users/:userId", AdminDeleteUser);
+
+// Register Google integration endpoints
+openapi.post("/api/google-drive/upload", GoogleDriveUpload);
+openapi.post("/api/google-sheets/sync", GoogleSheetsSync);
+openapi.get("/api/google/status", GoogleIntegrationStatus);
 
 // Export the Hono app
 export default app;
