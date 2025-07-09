@@ -1,0 +1,12 @@
+{
+  "incidentData": {
+    "id": "test-123",
+    "tanggal": "2025-07-09",
+    "waktu": "08:00-17:00",
+    "lokasi": "Jakarta",
+    "deskripsi": "Test incident",
+    "teknisi": "Test User",
+    "status": "completed",
+    "prioritas": "normal"
+  }
+}

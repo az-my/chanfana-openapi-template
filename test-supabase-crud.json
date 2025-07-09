@@ -1,0 +1,6 @@
+{
+  "operation": "select",
+  "table": "auth.users",
+  "columns": "id, email, created_at",
+  "where": {}
+}

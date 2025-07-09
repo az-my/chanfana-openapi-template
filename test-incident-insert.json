@@ -1,0 +1,13 @@
+{
+  "table": "incident_serpo",
+  "operation": "insert",
+  "data": {
+    "id_incident": "INC001",
+    "crossing_zona": "Jakarta Selatan",
+    "foto_odo_awal": "https://example.com/odo_awal.jpg",
+    "foto_tim_awal": "https://example.com/tim_awal.jpg",
+    "started_at": "2025-01-09T10:00:00Z",
+    "status": "active",
+    "description": "Test incident untuk pengujian sistem"
+  }
+}

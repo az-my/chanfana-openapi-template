@@ -1,28 +1,18 @@
 import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { google } from "googleapis";
 import { HandleArgs } from "../types";
 
 const GoogleSheetsSyncSchema = z.object({
   incidentData: z.object({
     id: z.string(),
     tanggal: z.string(),
-    jam_mulai: z.string(),
-    jam_selesai: z.string().optional(),
-    durasi: z.string().optional(),
+    waktu: z.string(),
     lokasi: z.string(),
     deskripsi: z.string(),
+    teknisi: z.string(),
     status: z.string(),
-    teknisi_id: z.string(),
-    teknisi_nama: z.string(),
-    foto_odo_awal: z.string().optional(),
-    foto_tim_awal: z.string().optional(),
-    foto_odo_akhir: z.string().optional(),
-    foto_tim_akhir: z.string().optional(),
-    created_at: z.string(),
-    updated_at: z.string(),
+    prioritas: z.string(),
   }),
-  spreadsheetId: z.string().optional().describe("Google Sheets ID (optional, will use default if not provided)"),
 });
 
 export class GoogleSheetsSync extends OpenAPIRoute {
@@ -58,96 +48,50 @@ export class GoogleSheetsSync extends OpenAPIRoute {
   async handle(c: HandleArgs[0]) {
     try {
       const body = await c.req.json();
-      const { incidentData, spreadsheetId } = GoogleSheetsSyncSchema.parse(body);
+      const { incidentData } = GoogleSheetsSyncSchema.parse(body);
 
-      // Initialize Google Sheets API
-      const auth = new google.auth.GoogleAuth({
-        credentials: {
-          type: "service_account",
-          project_id: c.env.GOOGLE_PROJECT_ID,
-          private_key_id: c.env.GOOGLE_PRIVATE_KEY_ID,
-          private_key: c.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-          client_email: c.env.GOOGLE_CLIENT_EMAIL,
-          client_id: c.env.GOOGLE_CLIENT_ID,
-          auth_uri: "https://accounts.google.com/o/oauth2/auth",
-          token_uri: "https://oauth2.googleapis.com/token",
-          auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-          client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${encodeURIComponent(c.env.GOOGLE_CLIENT_EMAIL)}`
-        },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      });
+      // Get access token using service account
+      const accessToken = await this.getAccessToken(c.env);
 
-      const sheets = google.sheets({ version: 'v4', auth });
-      const targetSpreadsheetId = spreadsheetId || c.env.GOOGLE_SHEETS_ID;
-
-      // Get current month and year for sheet name
-      const now = new Date();
-      const monthNames = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-      ];
-      const sheetName = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-
-      // Ensure sheet exists
-      await this.ensureSheetExists(sheets, targetSpreadsheetId, sheetName);
+      // Get or create spreadsheet
+      const spreadsheetId = await this.getOrCreateSpreadsheet(accessToken, c.env.GOOGLE_SPREADSHEET_ID);
 
       // Prepare row data
       const rowData = [
         incidentData.id,
         incidentData.tanggal,
-        incidentData.jam_mulai,
-        incidentData.jam_selesai || '',
-        incidentData.durasi || '',
+        incidentData.waktu,
         incidentData.lokasi,
         incidentData.deskripsi,
+        incidentData.teknisi,
         incidentData.status,
-        incidentData.teknisi_nama,
-        incidentData.foto_odo_awal ? 'Ya' : 'Tidak',
-        incidentData.foto_tim_awal ? 'Ya' : 'Tidak',
-        incidentData.foto_odo_akhir ? 'Ya' : 'Tidak',
-        incidentData.foto_tim_akhir ? 'Ya' : 'Tidak',
-        incidentData.created_at,
-        incidentData.updated_at,
+        incidentData.prioritas,
+        new Date().toISOString(), // timestamp
       ];
 
-      // Check if incident already exists (update vs insert)
-      const existingRowIndex = await this.findExistingRow(sheets, targetSpreadsheetId, sheetName, incidentData.id);
-      
-      let range: string;
-      let updatedRows: number;
+      // Append data to sheet
+      const appendResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sheet1:append?valueInputOption=USER_ENTERED`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: [rowData],
+        }),
+      });
 
-      if (existingRowIndex > 0) {
-        // Update existing row
-        range = `${sheetName}!A${existingRowIndex}:O${existingRowIndex}`;
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: targetSpreadsheetId,
-          range,
-          valueInputOption: 'RAW',
-          requestBody: {
-            values: [rowData],
-          },
-        });
-        updatedRows = 1;
-      } else {
-        // Append new row
-        range = `${sheetName}!A:O`;
-        const appendResponse = await sheets.spreadsheets.values.append({
-          spreadsheetId: targetSpreadsheetId,
-          range,
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: {
-            values: [rowData],
-          },
-        });
-        updatedRows = appendResponse.data.updates?.updatedRows || 1;
+      if (!appendResponse.ok) {
+        throw new Error(`Sheets append failed: ${appendResponse.status} ${appendResponse.statusText}`);
       }
+
+      const result = await appendResponse.json();
 
       return c.json({
         success: true,
-        spreadsheetId: targetSpreadsheetId,
-        range,
-        updatedRows,
+        spreadsheetId,
+        updatedRange: result.updates?.updatedRange,
+        updatedRows: result.updates?.updatedRows,
       });
 
     } catch (error) {
@@ -162,89 +106,143 @@ export class GoogleSheetsSync extends OpenAPIRoute {
     }
   }
 
-  private async ensureSheetExists(sheets: any, spreadsheetId: string, sheetName: string) {
-    try {
-      // Get spreadsheet metadata
-      const spreadsheet = await sheets.spreadsheets.get({
-        spreadsheetId,
-      });
+  private async getAccessToken(env: any): Promise<string> {
+    const jwtHeader = {
+      alg: 'RS256',
+      typ: 'JWT',
+      kid: env.GOOGLE_PRIVATE_KEY_ID,
+    };
 
-      // Check if sheet exists
-      const sheetExists = spreadsheet.data.sheets?.some(
-        (sheet: any) => sheet.properties?.title === sheetName
-      );
+    const now = Math.floor(Date.now() / 1000);
+    const jwtPayload = {
+      iss: env.GOOGLE_CLIENT_EMAIL,
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now,
+    };
 
-      if (!sheetExists) {
-        // Create new sheet
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            requests: [
-              {
-                addSheet: {
-                  properties: {
-                    title: sheetName,
-                  },
-                },
-              },
-            ],
-          },
-        });
-
-        // Add headers
-        const headers = [
-          'ID Insiden',
-          'Tanggal',
-          'Jam Mulai',
-          'Jam Selesai',
-          'Durasi',
-          'Lokasi',
-          'Deskripsi',
-          'Status',
-          'Teknisi',
-          'Foto Odo Awal',
-          'Foto Tim Awal',
-          'Foto Odo Akhir',
-          'Foto Tim Akhir',
-          'Dibuat',
-          'Diperbarui',
-        ];
-
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `${sheetName}!A1:O1`,
-          valueInputOption: 'RAW',
-          requestBody: {
-            values: [headers],
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Error ensuring sheet exists:', error);
-      throw error;
+    const encodedHeader = btoa(JSON.stringify(jwtHeader)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const encodedPayload = btoa(JSON.stringify(jwtPayload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    
+    const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+    
+    // Convert PEM private key to ArrayBuffer
+    const privateKeyPem = env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+    const pemHeader = '-----BEGIN PRIVATE KEY-----';
+    const pemFooter = '-----END PRIVATE KEY-----';
+    const pemContents = privateKeyPem.replace(pemHeader, '').replace(pemFooter, '').replace(/\s/g, '');
+    
+    // Decode base64 to get the raw key data
+    const binaryDerString = atob(pemContents);
+    const binaryDer = new Uint8Array(binaryDerString.length);
+    for (let i = 0; i < binaryDerString.length; i++) {
+      binaryDer[i] = binaryDerString.charCodeAt(i);
     }
+    
+    // Import the private key
+    const privateKey = await crypto.subtle.importKey(
+      'pkcs8',
+      binaryDer,
+      {
+        name: 'RSASSA-PKCS1-v1_5',
+        hash: 'SHA-256',
+      },
+      false,
+      ['sign']
+    );
+
+    // Sign the token
+    const signature = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      privateKey,
+      new TextEncoder().encode(unsignedToken)
+    );
+
+    const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+
+    const jwt = `${unsignedToken}.${encodedSignature}`;
+
+    // Exchange JWT for access token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error(`Token request failed: ${tokenResponse.status}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    return tokenData.access_token;
   }
 
-  private async findExistingRow(sheets: any, spreadsheetId: string, sheetName: string, incidentId: string): Promise<number> {
-    try {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `${sheetName}!A:A`,
-      });
-
-      const values = response.data.values;
-      if (!values) return 0;
-
-      for (let i = 0; i < values.length; i++) {
-        if (values[i][0] === incidentId) {
-          return i + 1; // Return 1-based row index
+  private async getOrCreateSpreadsheet(accessToken: string, spreadsheetId?: string): Promise<string> {
+    if (spreadsheetId) {
+      try {
+        // Try to access existing spreadsheet
+        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+        
+        if (response.ok) {
+          return spreadsheetId;
         }
+      } catch (error) {
+        console.log('Spreadsheet not found, creating new one');
       }
-
-      return 0; // Not found
-    } catch (error) {
-      console.error('Error finding existing row:', error);
-      return 0;
     }
+
+    // Create new spreadsheet
+    const createResponse = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        properties: {
+          title: `SPPD-LEMBUR-${new Date().getFullYear()}`,
+        },
+        sheets: [{
+          properties: {
+            title: 'Sheet1',
+          },
+          data: [{
+            rowData: [{
+              values: [
+                { userEnteredValue: { stringValue: 'ID' } },
+                { userEnteredValue: { stringValue: 'Tanggal' } },
+                { userEnteredValue: { stringValue: 'Waktu' } },
+                { userEnteredValue: { stringValue: 'Lokasi' } },
+                { userEnteredValue: { stringValue: 'Deskripsi' } },
+                { userEnteredValue: { stringValue: 'Teknisi' } },
+                { userEnteredValue: { stringValue: 'Status' } },
+                { userEnteredValue: { stringValue: 'Prioritas' } },
+                { userEnteredValue: { stringValue: 'Timestamp' } },
+              ],
+            }],
+          }],
+        }],
+      }),
+    });
+
+    if (!createResponse.ok) {
+      throw new Error(`Spreadsheet creation failed: ${createResponse.status}`);
+    }
+
+    const result = await createResponse.json();
+    return result.spreadsheetId;
   }
 }

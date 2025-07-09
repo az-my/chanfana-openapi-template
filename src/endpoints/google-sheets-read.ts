@@ -2,27 +2,35 @@ import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { HandleArgs } from "../types";
 
-export class GoogleIntegrationStatus extends OpenAPIRoute {
+const GoogleSheetsReadSchema = z.object({
+  sheetName: z.string().describe("Name of the sheet to read data from"),
+  range: z.string().optional().describe("Range to read (e.g., 'A1:Z100'), defaults to all data"),
+});
+
+export class GoogleSheetsRead extends OpenAPIRoute {
   schema = {
-    tags: ["Google Integration"],
-    summary: "Check Google Drive and Sheets integration status",
+    tags: ["Google Sheets"],
+    summary: "Read data from a specific sheet",
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: GoogleSheetsReadSchema,
+          },
+        },
+      },
+    },
     responses: {
       "200": {
-        description: "Integration status",
+        description: "Data read successfully",
         content: {
           "application/json": {
             schema: z.object({
               success: z.boolean(),
-              googleDrive: z.object({
-                connected: z.boolean(),
-                error: z.string().optional(),
-              }),
-              googleSheets: z.object({
-                connected: z.boolean(),
-                spreadsheetId: z.string().optional(),
-                error: z.string().optional(),
-              }),
-              timestamp: z.string(),
+              sheetName: z.string(),
+              range: z.string(),
+              data: z.array(z.array(z.any())),
+              rowCount: z.number(),
             }),
           },
         },
@@ -32,89 +40,48 @@ export class GoogleIntegrationStatus extends OpenAPIRoute {
 
   async handle(c: HandleArgs[0]) {
     try {
+      const body = await c.req.json();
+      const { sheetName, range } = GoogleSheetsReadSchema.parse(body);
+
       // Get access token using service account
       const accessToken = await this.getAccessToken(c.env);
+      
+      const spreadsheetId = c.env.GOOGLE_SPREADSHEET_ID;
 
-      // Test Drive API
-      let driveStatus = 'connected';
-      let driveError = null;
-      try {
-        const driveResponse = await fetch('https://www.googleapis.com/drive/v3/files?pageSize=1', {
+      // Determine the range to read
+      const readRange = range || `${sheetName}`;
+
+      // Read data from the specified sheet
+      const readResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(readRange)}`,
+        {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
           },
-        });
-        
-        if (!driveResponse.ok) {
-          throw new Error(`Drive API test failed: ${driveResponse.status}`);
         }
-      } catch (error) {
-        driveStatus = 'error';
-        driveError = error instanceof Error ? error.message : 'Unknown error';
+      );
+
+      if (!readResponse.ok) {
+        const errorText = await readResponse.text();
+        throw new Error(`Failed to read data: ${readResponse.status} ${readResponse.statusText}. Details: ${errorText}`);
       }
 
-      // Test Sheets API
-      let sheetsStatus = 'connected';
-      let sheetsError = null;
-      try {
-        if (c.env.GOOGLE_SPREADSHEET_ID) {
-          const sheetsResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${c.env.GOOGLE_SPREADSHEET_ID}`, {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-          });
-          
-          if (!sheetsResponse.ok) {
-            throw new Error(`Sheets API test failed: ${sheetsResponse.status}`);
-          }
-        } else {
-          // Just test authentication by creating a test spreadsheet
-          const createResponse = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              properties: {
-                title: 'Test Spreadsheet - Delete Me',
-              },
-            }),
-          });
-          
-          if (!createResponse.ok) {
-            throw new Error(`Sheets API test failed: ${createResponse.status}`);
-          }
-        }
-      } catch (error) {
-        sheetsStatus = 'error';
-        sheetsError = error instanceof Error ? error.message : 'Unknown error';
-      }
-
-      const overallStatus = driveStatus === 'connected' && sheetsStatus === 'connected' ? 'connected' : 'error';
+      const result = await readResponse.json();
 
       return c.json({
-        status: overallStatus,
-        services: {
-          drive: {
-            status: driveStatus,
-            error: driveError,
-          },
-          sheets: {
-            status: sheetsStatus,
-            error: sheetsError,
-          },
-        },
-        timestamp: new Date().toISOString(),
+        success: true,
+        sheetName,
+        range: result.range || readRange,
+        data: result.values || [],
+        rowCount: result.values ? result.values.length : 0,
       });
 
     } catch (error) {
-      console.error('Google integration status error:', error);
+      console.error('Google Sheets read error:', error);
       return c.json(
         {
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Status check failed',
-          timestamp: new Date().toISOString(),
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to read data',
         },
         500
       );
@@ -125,12 +92,13 @@ export class GoogleIntegrationStatus extends OpenAPIRoute {
     const jwtHeader = {
       alg: 'RS256',
       typ: 'JWT',
+      kid: env.GOOGLE_PRIVATE_KEY_ID,
     };
 
     const now = Math.floor(Date.now() / 1000);
     const jwtPayload = {
       iss: env.GOOGLE_CLIENT_EMAIL,
-      scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets',
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
       aud: 'https://oauth2.googleapis.com/token',
       exp: now + 3600,
       iat: now,

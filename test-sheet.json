@@ -1,0 +1,12 @@
+{
+  "incidentData": {
+    "id": "TEST001",
+    "tanggal": "2025-07-09",
+    "waktu": "08:30",
+    "lokasi": "Jakarta",
+    "deskripsi": "Test incident for API testing",
+    "teknisi": "Test Technician",
+    "status": "Open",
+    "prioritas": "High"
+  }
+}

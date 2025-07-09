@@ -1,0 +1,14 @@
+{
+  "operation": "insert",
+  "table": "test_sppd",
+  "data": {
+    "id": "TEST-001",
+    "tanggal": "2025-07-09",
+    "waktu": "09:00",
+    "lokasi": "Jakarta",
+    "deskripsi": "Test SPPD record",
+    "teknisi": "John Doe",
+    "status": "Active",
+    "prioritas": "High"
+  }
+}

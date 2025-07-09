@@ -1,0 +1,5 @@
+{
+  "direction": "supabase-to-sheets",
+  "tableName": "profiles",
+  "sheetName": "UJICOBA_SPPD"
+}

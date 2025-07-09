@@ -95,7 +95,17 @@ temp/
 # Backup files
 *.backup
 *.bak
+src/index.ts.backup
+wrangler.jsonc.backup
 
 # Database files (if any)
 *.sqlite
 *.db
+
+# Untracked test and integration files
+test-google-drive-connection.js
+test-google-integration.js
+test-upload.ps1
+
+tests/integration/dummyEndpoint.test.ts
+tests/integration/tasks.test.ts

@@ -1,0 +1,5 @@
+{
+  "operation": "select",
+  "table": "incident_serpo",
+  "limit": 5
+}

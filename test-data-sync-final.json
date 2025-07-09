@@ -1,0 +1,5 @@
+{
+  "direction": "supabase-to-sheets",
+  "tableName": "incident_serpo",
+  "sheetName": "DEV_SPPD"
+}

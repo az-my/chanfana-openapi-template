@@ -1,0 +1,7 @@
+{
+  "table": "incident_serpo",
+  "operation": "select",
+  "filters": {
+    "id_incident": "INC001"
+  }
+}
